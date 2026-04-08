@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agnos-config
+  namespace: uat
+data:
+  APP_ENV: "uat"
+  APP_VERSION: "1.0.0"
+  LOG_LEVEL: "info"

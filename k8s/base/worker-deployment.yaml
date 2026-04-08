@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agnos-worker
+  labels:
+    app: agnos-worker
+spec:
+  replicas: 1                    # Worker should be exactly 1 — running 2 would double-process every record
+  selector:
+    matchLabels:
+      app: agnos-worker
+  template:
+    metadata:
+      labels:
+        app: agnos-worker
+    spec:
+      containers:
+        - name: worker
+          image: agnos-worker:latest
+          imagePullPolicy: Never
+
+          envFrom:
+            - configMapRef:
+                name: agnos-config
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+          # Worker has no HTTP endpoint so we use a process-based liveness probe
+          # It checks if the process is alive by running a command inside the container
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import os; os.path.exists('/tmp/records.json') or exit(0)"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3

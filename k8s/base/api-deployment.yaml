@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agnos-api
+  labels:
+    app: agnos-api
+spec:
+  replicas: 2                        # 2 replicas = high availability, one pod can die and service continues
+  selector:
+    matchLabels:
+      app: agnos-api
+  template:
+    metadata:
+      labels:
+        app: agnos-api
+    spec:
+      containers:
+        - name: api
+          image: agnos-api:latest
+          imagePullPolicy: Never     # CRITICAL for minikube — use local image, don't try to pull from registry
+          ports:
+            - containerPort: 8000
+
+          # --- Inject all config from the ConfigMap ---
+          envFrom:
+            - configMapRef:
+                name: agnos-config
+
+          # --- Resource limits: prevent one pod from eating all node resources ---
+          resources:
+            requests:
+              cpu: "100m"            # 0.1 CPU core minimum guaranteed
+              memory: "128Mi"        # 128MB RAM minimum guaranteed
+            limits:
+              cpu: "500m"            # 0.5 CPU core maximum allowed
+              memory: "256Mi"        # 256MB RAM maximum allowed
+
+          # --- Readiness probe: K8s won't send traffic until this passes ---
+          # Protects against sending requests to a pod that's still starting up
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5   # wait 5s after container starts before first check
+            periodSeconds: 10        # check every 10s
+            failureThreshold: 3      # mark unready after 3 failures
+
+          # --- Liveness probe: K8s restarts the pod if this fails ---
+          # Protects against pods that are running but frozen/deadlocked
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15  # give app more time to start before liveness kicks in
+            periodSeconds: 20
+            failureThreshold: 3
