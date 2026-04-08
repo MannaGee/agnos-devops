@@ -16,3 +16,4 @@ spec:
         target:
           type: Utilization
           averageUtilization: 70 # scale up when average CPU across pods exceeds 70%
+          
