@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: agnos-api-monitor
+  namespace: monitoring
+  labels:
+    release: monitoring          # must match the helm release name
+spec:
+  namespaceSelector:
+    matchNames:
+      - dev                      # scrape services in the dev namespace
+  selector:
+    matchLabels:
+      app: agnos-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

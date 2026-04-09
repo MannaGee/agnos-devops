@@ -2,11 +2,14 @@ apiVersion: v1
 kind: Service
 metadata:
   name: agnos-api-service
+  labels:
+    app: agnos-api               # label added — ServiceMonitor selects on this
 spec:
   selector:
     app: agnos-api              # routes traffic to pods with this label
   ports:
-    - protocol: TCP
+    - name: http                 # named port — required for ServiceMonitor
+      protocol: TCP
       port: 80                  # Service listens on port 80
       targetPort: 8000          # forwards to container port 8000
   type: ClusterIP               # internal only — exposed via minikube tunnel or NodePort for testing
