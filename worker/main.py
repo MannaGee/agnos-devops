@@ -1,6 +1,5 @@
 import json
 import os
-import time
 from datetime import datetime, timezone
 from apscheduler.schedulers.blocking import BlockingScheduler
 import structlog
