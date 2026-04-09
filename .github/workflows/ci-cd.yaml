@@ -1,0 +1,125 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, dev, uat]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─────────────────────────────────────────
+  # STAGE 1: Lint & Test
+  # ─────────────────────────────────────────
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install API dependencies
+        run: |
+          pip install -r api/requirements.txt
+          pip install flake8 pytest
+
+      - name: Lint API (flake8)
+        run: flake8 api/main.py --max-line-length=100
+
+      - name: Install Worker dependencies
+        run: pip install -r worker/requirements.txt
+
+      - name: Lint Worker (flake8)
+        run: flake8 worker/main.py --max-line-length=100
+
+      - name: Run API tests
+        run: pytest api/tests/ -v
+        continue-on-error: false
+
+  # ─────────────────────────────────────────
+  # STAGE 2: Build Container Images
+  # ─────────────────────────────────────────
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: lint-and-test        # only runs if lint-and-test passes
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        run: |
+          docker build -t agnos-api:${{ github.sha }} ./api
+          docker build -t agnos-api:latest ./api
+
+      - name: Build Worker image
+        run: |
+          docker build -t agnos-worker:${{ github.sha }} ./worker
+          docker build -t agnos-worker:latest ./worker
+
+      - name: Verify images exist
+        run: docker images | grep agnos
+
+  # ─────────────────────────────────────────
+  # STAGE 3: Security Scan (Optional)
+  # ─────────────────────────────────────────
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner on API
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: ./api
+          severity: HIGH,CRITICAL
+          exit-code: 0             # don't fail the pipeline on findings, just report
+
+      - name: Run Trivy vulnerability scanner on Worker
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: ./worker
+          severity: HIGH,CRITICAL
+          exit-code: 0
+
+  # ─────────────────────────────────────────
+  # STAGE 4: Deploy (Mocked)
+  # ─────────────────────────────────────────
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: security-scan
+    if: github.ref == 'refs/heads/main'   # only deploy from main branch
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Mock Deploy to Kubernetes
+        run: |
+          echo "=========================================="
+          echo "  Deploying to PRODUCTION"
+          echo "  Commit: ${{ github.sha }}"
+          echo "  Branch: ${{ github.ref_name }}"
+          echo "  Triggered by: ${{ github.actor }}"
+          echo "=========================================="
+          echo "kubectl apply -f k8s/base/ -n prod"
+          echo "kubectl set image deployment/agnos-api api=agnos-api:${{ github.sha }} -n prod"
+          echo "kubectl set image deployment/agnos-worker worker=agnos-worker:${{ github.sha }} -n prod"
+          echo "kubectl rollout status deployment/agnos-api -n prod"
+          echo "Deploy simulation complete."
